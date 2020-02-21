@@ -33,23 +33,24 @@ type SyncDir struct {
 
 var ItemRegex = regexp.MustCompile("[a-z0-9]{32}.md")
 
-func (sd *SyncDir) Read() error {
+func (sd *SyncDir) Read() (Items, error) {
 	// TODO this should probably check the lock directory
 	log.Printf("reading %s", sd.dir.Name())
 	entries, err := sd.dir.Readdir(0)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	items := make([]*Item, 0, len(entries))
 
 	for _, entry := range entries {
 		if ItemRegex.MatchString(entry.Name()) {
-			log.Printf("Item %s", entry.Name())
 			item, err := ReadItem(filepath.Join(sd.path, entry.Name()))
 			if err != nil {
-				log.Fatal(err)
+				return nil, err
 			}
-			log.Printf("%v", item)
+			items = append(items, item)
 		}
 	}
-	return nil
+	return items, nil
 }
