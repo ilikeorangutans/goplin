@@ -1,9 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
 
+	"github.com/ilikeorangutans/goplin/pkg/model"
 	"github.com/ilikeorangutans/goplin/pkg/sync"
 )
 
@@ -17,13 +20,20 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("Got %d items", len(items))
-	for _, item := range items {
-		if item.Type == sync.TypeNote {
-			log.Printf("Note ")
-		}
-		if item.Type == sync.TypeFolder {
-			log.Printf("Notebook %s", item.Body)
-		}
+	notebooks, err := sync.NotebooksFromSyncDir(items)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, notebook := range notebooks.Roots() {
+		printNotebook(notebook, 0)
+	}
+}
+
+func printNotebook(notebook *model.Notebook, level int) {
+	indent := strings.Repeat("  ", level)
+	fmt.Printf("%s%s\n", indent, notebook.Title)
+	for _, child := range notebook.Notebooks {
+		printNotebook(child, level+1)
 	}
 }

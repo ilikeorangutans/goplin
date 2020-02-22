@@ -11,7 +11,34 @@ import (
 	"time"
 )
 
-type Items []*Item
+func NewItems(items []*Item) *Items {
+	byID := make(map[string]*Item)
+	for _, item := range items {
+		byID[item.ID] = item
+	}
+
+	return &Items{
+		Items: items,
+		byID:  byID,
+	}
+}
+
+type Items struct {
+	Items []*Item
+	byID  map[string]*Item
+}
+
+func (i *Items) Len() int {
+	return len(i.Items)
+}
+
+func (i *Items) FindByID(id string) (*Item, error) {
+	item, ok := i.byID[id]
+	if !ok {
+		return nil, fmt.Errorf("no such item")
+	}
+	return item, nil
+}
 
 var IDLineRegex = regexp.MustCompile("^id: [a-z0-9]{32}$")
 
@@ -44,7 +71,7 @@ func ReadItem(path string) (*Item, error) {
 	item := &Item{}
 	for i, line := range lines {
 		if i < lastIdPos {
-			fmt.Fprint(&bodyBuilder, line)
+			fmt.Fprintln(&bodyBuilder, line)
 		} else {
 			parts := strings.SplitN(line, ": ", 2)
 			field := parts[0]
@@ -67,7 +94,7 @@ func ReadItem(path string) (*Item, error) {
 				"is_todo":                   asBool(item.setField),
 				"item_id":                   item.setField,
 				"item_type":                 asInt(item.setField),
-				"item_updated_time":         asTime(item.setField),
+				"item_updated_time":         asUnixTimestamp(item.setField),
 				"latitude":                  asFloat(item.setField),
 				"longitude":                 asFloat(item.setField),
 				"markup_language":           asBool(item.setField),
