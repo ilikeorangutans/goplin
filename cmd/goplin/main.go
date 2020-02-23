@@ -11,6 +11,15 @@ import (
 )
 
 func main() {
+	db, err := model.OpenDatabase()
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+	err = db.Migrate()
+	if err != nil {
+		log.Fatal(err)
+	}
 	syncDir, err := sync.OpenDir(os.Args[1])
 	if err != nil {
 		log.Fatal(err)
