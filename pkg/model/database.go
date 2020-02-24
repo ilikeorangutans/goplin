@@ -33,7 +33,7 @@ func (d *Database) Migrate() error {
 	log.Printf("max version from db is %d, max migration is %d", maxVersion, maxMigration)
 	if maxVersion < maxMigration {
 		for i, query := range migrations {
-			if maxVersion < i {
+			if i < maxVersion {
 				log.Printf("skipping %d", i)
 				continue
 			}
