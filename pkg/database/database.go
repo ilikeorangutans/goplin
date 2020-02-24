@@ -1,4 +1,4 @@
-package model
+package database
 
 import (
 	"log"
@@ -49,6 +49,12 @@ func (d *Database) Migrate() error {
 	return nil
 }
 
+func (d *Database) SyncItems() *SyncItems {
+	return &SyncItems{
+		db: d.db,
+	}
+}
+
 func (d *Database) Close() error {
 	return d.db.Close()
 }
@@ -69,4 +75,19 @@ func OpenDatabase() (*Database, error) {
 	return &Database{
 		db: db,
 	}, nil
+}
+
+func (d *Database) Begin() *sqlx.Tx {
+	return d.db.MustBegin()
+}
+
+func (d *Database) HasSyncItem(id string) (bool, error) {
+
+	hasID := false
+	err := d.db.Get(&hasID, "select count(*) from sync_items where id = $1", id)
+	if err != nil {
+		return false, err
+	}
+
+	return hasID, nil
 }

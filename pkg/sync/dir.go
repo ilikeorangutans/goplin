@@ -6,13 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-
-	"github.com/pkg/errors"
 )
 
 var ItemRegex = regexp.MustCompile("[a-z0-9]{32}.md")
 
-func OpenDir(path string) (*SyncDir, error) {
+func OpenDir(path string) (*Dir, error) {
 	if fileInfo, err := os.Stat(path); err != nil {
 		return nil, err
 	} else if !fileInfo.IsDir() {
@@ -24,26 +22,18 @@ func OpenDir(path string) (*SyncDir, error) {
 		log.Fatal(err)
 	}
 
-	lockDir, err := NewLock(filepath.Join(path, ".lock"))
-	return &SyncDir{
-		dir:     dir,
-		path:    path,
-		lockDir: lockDir,
+	return &Dir{
+		dir:  dir,
+		path: path,
 	}, nil
 }
 
-type SyncDir struct {
-	dir     *os.File
-	path    string
-	lockDir *LockDir
+type Dir struct {
+	dir  *os.File
+	path string
 }
 
-func (sd *SyncDir) Read() (*Items, error) {
-	lock, err := sd.lockDir.Acquire()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not acquire lock")
-	}
-	defer lock.Release()
+func (sd *Dir) Read() (*Items, error) {
 	log.Printf("reading %s", sd.dir.Name())
 	entries, err := sd.dir.Readdir(0)
 	if err != nil {

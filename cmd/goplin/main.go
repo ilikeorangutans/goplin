@@ -6,12 +6,13 @@ import (
 	"os"
 	"strings"
 
+	"github.com/ilikeorangutans/goplin/pkg/database"
 	"github.com/ilikeorangutans/goplin/pkg/model"
 	"github.com/ilikeorangutans/goplin/pkg/sync"
 )
 
 func main() {
-	db, err := model.OpenDatabase()
+	db, err := database.OpenDatabase()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -25,6 +26,16 @@ func main() {
 		log.Fatal(err)
 	}
 	items, err := syncDir.Read()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	synchronizer, err := sync.NewSynchronizer(os.Args[1], db)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = synchronizer.Sync()
 	if err != nil {
 		log.Fatal(err)
 	}

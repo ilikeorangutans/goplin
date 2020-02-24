@@ -3,13 +3,14 @@ package sync
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
 	"time"
 )
+
+var IDLineRegex = regexp.MustCompile("^id: [a-z0-9]{32}$")
 
 func NewItems(items []*Item) *Items {
 	byID := make(map[string]*Item)
@@ -23,6 +24,7 @@ func NewItems(items []*Item) *Items {
 	}
 }
 
+// Items is all the sync items in a sync directory
 type Items struct {
 	Items []*Item
 	byID  map[string]*Item
@@ -35,13 +37,12 @@ func (i *Items) Len() int {
 func (i *Items) FindByID(id string) (*Item, error) {
 	item, ok := i.byID[id]
 	if !ok {
-		return nil, fmt.Errorf("no such item")
+		return nil, fmt.Errorf("no item with id %q", id)
 	}
 	return item, nil
 }
 
-var IDLineRegex = regexp.MustCompile("^id: [a-z0-9]{32}$")
-
+// ReadItem reads a given file path and parses it into a Item.
 func ReadItem(path string) (*Item, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -134,43 +135,44 @@ func ReadItem(path string) (*Item, error) {
 }
 
 type Item struct {
-	ID                      string
-	CreatedTime             time.Time
-	UpdatedTime             time.Time
-	ParentID                string
-	ItemType                int
-	ItemID                  string
+	Altitude                float64
+	ApplicationData         string
+	Author                  string
 	Body                    string
-	Type                    Type
-	Mime                    string
-	ItemUpdatedTime         time.Time
-	UserCreatedTime         time.Time
-	Filename                string
-	FileExtension           string
-	EncryptionCipherText    string
-	EncryptionBlobEncrypted string
-	EncryptionApplied       bool
-	Size                    int
-	IsShared                bool
-	TitleDiff               string
 	BodyDiff                string
-	MetadataDiff            string
+	CreatedTime             time.Time
+	EncryptionApplied       bool
+	EncryptionBlobEncrypted string
+	EncryptionCipherText    string
+	FileExtension           string
+	Filename                string
+	ID                      string
 	IsConflict              bool
+	IsShared                bool
 	IsTodo                  bool
+	ItemID                  string
+	ItemType                int
+	ItemUpdatedTime         time.Time
 	Latitude                float64
 	Longitude               float64
-	Altitude                float64
-	Author                  string
-	SourceURL               *url.URL
-	TodoDue                 time.Time
-	TodoCompleted           bool
+	MarkupLanguage          bool
+	MetadataDiff            string
+	Mime                    string
+	NoteID                  string
+	Order                   int
+	ParentID                string
+	Size                    int
 	Source                  string
 	SourceApplication       string
-	ApplicationData         string
-	Order                   int
-	MarkupLanguage          bool
-	NoteID                  string
+	SourceURL               *url.URL
 	TagID                   string
+	TitleDiff               string
+	TodoCompleted           bool
+	TodoDue                 time.Time
+	Type                    Type
+	UpdatedTime             time.Time
+	UserCreatedTime         time.Time
+	UserUpdatedTime         time.Time
 }
 
 func (item *Item) setField(field string, value interface{}) error {
@@ -178,7 +180,7 @@ func (item *Item) setField(field string, value interface{}) error {
 	case "id":
 		item.ID = value.(string)
 	case "user_updated_time":
-		// TODO
+		item.UserUpdatedTime = value.(time.Time)
 	case "created_time":
 		item.CreatedTime = value.(time.Time)
 	case "mime":
@@ -198,8 +200,7 @@ func (item *Item) setField(field string, value interface{}) error {
 	case "is_shared":
 		item.IsShared = value.(bool)
 	case "type_":
-		i := value.(int)
-		t := Type(i)
+		t := Type(value.(int))
 		item.Type = t
 	case "parent_id":
 		item.ParentID = value.(string)
@@ -254,10 +255,5 @@ func (item *Item) setField(field string, value interface{}) error {
 	default:
 		return fmt.Errorf("don't know how to set field %q", field)
 	}
-	return nil
-}
-
-func (item *Item) doNothingSetter(field string, value interface{}) error {
-	log.Printf("doing nothing with field %s: %v", field, value)
 	return nil
 }

@@ -1,4 +1,4 @@
-package model
+package database
 
 var migrations []string = []string{
 	`
@@ -26,6 +26,11 @@ var migrations []string = []string{
 		updated_time integer not null,
 		source text not null,
 		todo integer not null default 0
+	  );
+	`,
+	`
+	  create table sync_items (
+		id string not null primary key
 	  );
 	`,
 }
