@@ -9,6 +9,7 @@ import (
 
 	"github.com/gdamore/tcell"
 	"github.com/ilikeorangutans/goplin/pkg/change"
+	"github.com/ilikeorangutans/goplin/pkg/cmdbar"
 	"github.com/ilikeorangutans/goplin/pkg/database"
 	"github.com/ilikeorangutans/goplin/pkg/model"
 	"github.com/ilikeorangutans/goplin/pkg/sync"
@@ -107,73 +108,73 @@ func main() {
 	root.AddItem(mainPanel, 0, 3, false)
 	root.AddItem(logWindow, 10, 1, false)
 
-	inputBox := tview.NewInputField()
-	inputBox.SetPlaceholder("begin entering commands by pressing \":\" or begin search with \"/\"")
-	inputBox.SetChangedFunc(func(input string) {
-		s := strings.TrimSpace(input)
-		logWindow.SetText(logWindow.GetText(false) + s)
-		logWindow.ScrollToEnd()
+	cmdBar := cmdbar.New("begin entering commands by pressing \":\" or begin search with \"/\"")
+	cmdBar.AddCmd(":q", "quit the app", func(_ string) error {
+		cancel()
+		return nil
 	})
-	inputBox.SetDoneFunc(func(key tcell.Key) {
-		if key != tcell.KeyEnter {
-			inputBox.SetText("")
-			return
-		}
-		input := strings.TrimSpace(inputBox.GetText())
-
-		if input == ":q" || input == ":quit" {
-			cancel()
-		} else if strings.HasPrefix(input, ":mkbook ") {
-			name := strings.SplitN(input, " ", 2)[1]
-
-			var err error
-			var parent *model.Notebook
-			if strings.HasPrefix(name, "//") {
-				parent, err = notebooks.NotebookByID(treeView.GetCurrentNode().GetReference().(string))
-				if err != nil {
-					logWindow.SetText(logWindow.GetText(false) + "couldn't find parent: " + err.Error())
-					logWindow.ScrollToEnd()
-					return
-				}
-				logWindow.SetText(logWindow.GetText(false) + "adding notebook with parent " + parent.Title)
+	cmdBar.AddCmd(":mkbook", "make a top level notebook, prefix with // to place under current notebook", func(name string) error {
+		var err error
+		var parent *model.Notebook
+		if strings.HasPrefix(name, "//") {
+			parent, err = notebooks.NotebookByID(treeView.GetCurrentNode().GetReference().(string))
+			if err != nil {
+				logWindow.SetText(logWindow.GetText(false) + "couldn't find parent: " + err.Error())
 				logWindow.ScrollToEnd()
-				name = name[2:]
+				return err
 			}
-
-			logWindow.SetText(logWindow.GetText(false) + "adding notebook " + name)
+			logWindow.SetText(logWindow.GetText(false) + "adding notebook with parent " + parent.Title)
 			logWindow.ScrollToEnd()
-			commands <- Command{Execute: func(notebooks *model.NotebookService) error {
-				change.AddNotebook(name, parent).Apply(notebooks)
-				return nil
-			}}
-			inputBox.SetText("")
-			app.SetFocus(treeView)
-		} else if strings.HasPrefix(input, ":rmbook") {
-			id := treeView.GetCurrentNode().GetReference().(string)
-			logWindow.SetText(logWindow.GetText(false) + "deleting notebook " + id)
-			logWindow.ScrollToEnd()
-			commands <- Command{Execute: func(notebooks *model.NotebookService) error {
-				change.DeleteNotebook(id).Apply(notebooks)
-				return nil
-			}}
-			inputBox.SetText("")
-			app.SetFocus(treeView)
-
+			name = name[2:]
 		}
+
+		logWindow.SetText(logWindow.GetText(false) + "adding notebook " + name)
+		logWindow.ScrollToEnd()
+		commands <- Command{Execute: func(notebooks *model.NotebookService) error {
+			change.AddNotebook(name, parent).Apply(notebooks)
+			return nil
+		}}
+		cmdBar.SetText("")
+		app.SetFocus(treeView)
+
+		return nil
 	})
-	root.AddItem(inputBox, 1, 1, false)
+	cmdBar.AddCmd(":rmbook", "remove currently selected notebook", func(_ string) error {
+		id := treeView.GetCurrentNode().GetReference().(string)
+		logWindow.SetText(logWindow.GetText(false) + "deleting notebook " + id)
+		logWindow.ScrollToEnd()
+		commands <- Command{Execute: func(notebooks *model.NotebookService) error {
+			change.DeleteNotebook(id).Apply(notebooks)
+			return nil
+		}}
+		cmdBar.SetText("")
+		app.SetFocus(treeView)
+		return nil
+	})
+	cmdBar.AddCmd(":cmds", "shows all known commands and their usage", func(_ string) error {
+		var sbuilder strings.Builder
+		fmt.Fprint(&sbuilder, "Known commands:\n")
+		for _, c := range cmdBar.SummarizeCommands() {
+			fmt.Fprintf(&sbuilder, "%-10s  %s\n", c.Verb, c.Summary)
+		}
+		logWindow.SetText(sbuilder.String())
+		logWindow.ScrollToEnd()
+		return nil
+	})
+
+	root.AddItem(cmdBar, 1, 1, false)
 
 	app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if app.GetFocus() != inputBox && event.Key() == tcell.KeyRune {
+		if app.GetFocus() != cmdBar && event.Key() == tcell.KeyRune {
 			switch event.Rune() {
 			case ':':
-				inputBox.SetText(":")
-				app.SetFocus(inputBox)
+				cmdBar.SetText(":")
+				app.SetFocus(cmdBar)
 			case '/':
-				inputBox.SetText("/")
-				app.SetFocus(inputBox)
+				cmdBar.SetText("/")
+				app.SetFocus(cmdBar)
 			}
-		} else if event.Key() == tcell.KeyEscape && app.GetFocus() == inputBox {
+		} else if event.Key() == tcell.KeyEscape && app.GetFocus() == cmdBar {
 			app.SetFocus(treeView)
 		}
 		return event
@@ -188,13 +189,12 @@ func main() {
 		}
 	}()
 
-	logWindow.SetText(`
-known commands:
-q, quit          quit
-mkbook title     creates a new notebook at the root level
-mkbook //title   creates a notebook under the currently selected notebook
-rmbook           deletes the currently selected notebook
-	`)
+	var sbuilder strings.Builder
+	fmt.Fprint(&sbuilder, "Known commands:\n")
+	for _, c := range cmdBar.SummarizeCommands() {
+		fmt.Fprintf(&sbuilder, "%-10s  %s\n", c.Verb, c.Summary)
+	}
+	logWindow.SetText(sbuilder.String())
 	logWindow.ScrollToEnd()
 
 	app.SetRoot(root, true)
