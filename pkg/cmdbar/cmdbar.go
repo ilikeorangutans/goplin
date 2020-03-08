@@ -54,6 +54,7 @@ func (c *CmdBar) doneFunc(key tcell.Key) {
 		c.Clear()
 		c.SetPlaceholder(fmt.Sprintf("unknown verb %s", verb))
 	} else {
+		// TODO handle returned error
 		cmd.Execute(rest)
 		c.Clear()
 	}
@@ -67,6 +68,7 @@ func (c *CmdBar) FindByVerb(verb string) *Cmd {
 	}
 }
 
+// Clear clears the CmdBar
 func (c *CmdBar) Clear() {
 	c.SetText("")
 }

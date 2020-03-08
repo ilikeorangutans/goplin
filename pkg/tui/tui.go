@@ -5,26 +5,31 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/gdamore/tcell"
 	"github.com/ilikeorangutans/goplin/pkg/cmdbar"
+	"github.com/ilikeorangutans/goplin/pkg/workspace"
+
+	"github.com/gdamore/tcell"
 	"github.com/rivo/tview"
 )
 
 func NewMain() *Main {
 	app := tview.NewApplication()
 	main := &Main{
-		app: app,
+		app:          app,
+		commandQueue: make(chan Command),
 	}
 
 	return main
 }
 
 type Main struct {
-	app      *tview.Application
-	cmdBar   *cmdbar.CmdBar
-	treeView *tview.TreeView
-	log      *Log
-	logger   Logger
+	app          *tview.Application
+	cmdBar       *cmdbar.CmdBar
+	treeView     *tview.TreeView
+	log          *Log
+	logger       Logger
+	workspace    *workspace.Workspace
+	commandQueue chan Command
 }
 
 // Run is the main entry point into the app.
@@ -36,9 +41,48 @@ func (m *Main) Run(ctx context.Context) error {
 
 	m.logger.WriteString("goplin starting up...")
 
+	if err := m.loadWorkspace(); err != nil {
+		return err
+	}
+
 	go m.shutdownListener(ctx)
+	go m.pollCommands(ctx)
+
+	m.printHelp()
+
 	return m.app.Run()
 }
+
+func (m *Main) pollCommands(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case cmd := <-m.commandQueue:
+			err := cmd.Execute()
+			// TODO can we split ui updates from the commands?
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
+func (m *Main) loadWorkspace() error {
+	// TODO here we'd actually read files
+	m.logger.WriteString("loading workspace...")
+	workspace, err := workspace.Open()
+	if err != nil {
+		return err
+	}
+
+	m.logger.WriteString(fmt.Sprintf("loaded workspace %q", workspace.Name()))
+
+	m.workspace = workspace
+
+	return nil
+}
+
 func (m *Main) setUpUI() {
 	root := tview.NewFlex()
 	root.SetDirection(tview.FlexRow)
@@ -75,21 +119,35 @@ func (m *Main) setUpUI() {
 	m.app.SetFocus(m.treeView)
 }
 
+func (m *Main) printHelp() {
+	var sbuilder strings.Builder
+	fmt.Fprint(&sbuilder, "Known commands:\n")
+	for _, c := range m.cmdBar.SummarizeCommands() {
+		fmt.Fprintf(&sbuilder, "%-10s  %s\n", c.Verb, c.Summary)
+	}
+
+	m.logger.WriteString(sbuilder.String())
+
+}
+
 func (m *Main) setUpCommands(ctx context.Context, cancel func()) {
 	m.cmdBar.AddCmd(":q", "quit goplin", func(_ string) error {
 		cancel()
 		return nil
 	})
 	m.cmdBar.AddCmd(":help", "shows all known commands and their usage", func(_ string) error {
-		var sbuilder strings.Builder
-		fmt.Fprint(&sbuilder, "Known commands:\n")
-		for _, c := range m.cmdBar.SummarizeCommands() {
-			fmt.Fprintf(&sbuilder, "%-10s  %s\n", c.Verb, c.Summary)
-		}
-
-		m.logger.WriteString(sbuilder.String())
+		m.printHelp()
 		return nil
 	})
+	m.cmdBar.AddCmd(":foo", "foo", func(s string) error {
+		m.logger.WriteString("doing foo")
+		m.commandQueue <- &FooCommand{UIUpdater: m, Tree: m.treeView}
+		return nil
+	})
+}
+
+func (m *Main) QueueUpdateDraw(f func()) {
+	m.app.QueueUpdateDraw(f)
 }
 
 // shutdownListener listens to the current context and stops the app when the context is done.

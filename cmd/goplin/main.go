@@ -9,6 +9,7 @@ import (
 	"github.com/ilikeorangutans/goplin/pkg/model"
 	"github.com/ilikeorangutans/goplin/pkg/sync"
 	"github.com/ilikeorangutans/goplin/pkg/tui"
+
 	"github.com/rivo/tview"
 )
 
@@ -28,17 +29,7 @@ func NotebookToTreeNode(notebook *model.Notebook) *tview.TreeNode {
 }
 
 func main() {
-
-	// TOOD create a workspace type
-	notebooks := model.NewNotebookService()
-	notebooks.Create("stuff", nil)
-	notebooks.Create("more stuff", nil)
-	notebooks.Create("some stuff", nil)
-	notebooks.Create("no stuff", nil)
-	notebooks.Create("only stuff", nil)
-
 	ctx := context.Background()
-	//  TODO inject workspace/notebooks into main
 	mainUI := tui.NewMain()
 	if err := mainUI.Run(ctx); err != nil {
 		panic(err)
@@ -61,7 +52,7 @@ func blarg() {
 	//
 	// 				app.QueueUpdateDraw(func() {
 	// 					treeView.GetRoot().ClearChildren()
-	// 					for _, notebook := range notebooks.RootNotebooks() {
+	// 					for _, notebook := range notebooks.TopLevel() {
 	// 						node := NotebookToTreeNode(notebook)
 	//
 	// 						treeView.GetRoot().AddChild(node)
@@ -126,7 +117,7 @@ func blarg() {
 	// 	})
 	//
 	// 	// build initial ui
-	// 	for _, notebook := range notebooks.RootNotebooks() {
+	// 	for _, notebook := range notebooks.TopLevel() {
 	// 		node := NotebookToTreeNode(notebook)
 	//
 	// 		treeView.GetRoot().AddChild(node)

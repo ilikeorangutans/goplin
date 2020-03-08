@@ -9,23 +9,6 @@ type Note struct {
 	Notebook *Notebook
 }
 
-type Notebook struct {
-	Item
-	Title     string
-	Parent    *Notebook
-	Order     int
-	Notebooks []*Notebook
-}
-
-func (n Notebook) HasParent() bool {
-	return n.Parent != nil
-}
-
-type Notebooks struct {
-	Notebooks []*Notebook
-	ByID      map[string]*Notebook
-}
-
 func NewNotebookService() *NotebookService {
 	return &NotebookService{
 		notebooksByID: make(map[string]*Notebook),
@@ -88,7 +71,7 @@ func (n *NotebookService) Create(name string, parent *Notebook) (*Notebook, erro
 	return notebook, nil
 }
 
-func (n *NotebookService) RootNotebooks() []*Notebook {
+func (n *NotebookService) TopLevel() []*Notebook {
 	var result []*Notebook
 
 	for _, notebook := range n.notebooks {
