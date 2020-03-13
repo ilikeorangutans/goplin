@@ -9,12 +9,13 @@ import (
 	"github.com/ilikeorangutans/goplin/pkg/model"
 	"github.com/ilikeorangutans/goplin/pkg/sync"
 	"github.com/ilikeorangutans/goplin/pkg/tui"
+	"github.com/ilikeorangutans/goplin/pkg/workspace"
 
 	"github.com/rivo/tview"
 )
 
 type Command struct {
-	Execute func(notebooks *model.NotebookService) error
+	Execute func(notebooks *workspace.Workspace) error
 }
 
 func NotebookToTreeNode(notebook *model.Notebook) *tview.TreeNode {
@@ -29,9 +30,10 @@ func NotebookToTreeNode(notebook *model.Notebook) *tview.TreeNode {
 }
 
 func main() {
-	ctx := context.Background()
+	ctx, cancel := context.WithCancel(context.Background())
 	mainUI := tui.NewMain()
 	if err := mainUI.Run(ctx); err != nil {
+		cancel()
 		panic(err)
 	}
 }

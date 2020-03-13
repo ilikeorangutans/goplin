@@ -1,21 +1,25 @@
 package workspace
 
-import "github.com/ilikeorangutans/goplin/pkg/model"
-
 func Open() (*Workspace, error) {
 	return &Workspace{
-		notebookService: model.NewNotebookService(),
+		notebooks: NewNotebooks(),
+		notes:     NewNotes(),
 	}, nil
 }
 
 type Workspace struct {
-	notebookService *model.NotebookService
+	notebooks *Notebooks
+	notes     *Notes
 }
 
 func (w *Workspace) Name() string {
 	return "default workspace"
 }
 
-func (w *Workspace) Notebooks() *model.NotebookService {
-	return w.notebookService
+func (w *Workspace) Notebooks() *Notebooks {
+	return w.notebooks
+}
+
+func (w *Workspace) Notes() *Notes {
+	return w.notes
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/ilikeorangutans/goplin/pkg/cmdbar"
+	"github.com/ilikeorangutans/goplin/pkg/model"
 	"github.com/ilikeorangutans/goplin/pkg/workspace"
 
 	"github.com/gdamore/tcell"
@@ -23,13 +24,19 @@ func NewMain() *Main {
 }
 
 type Main struct {
-	app          *tview.Application
-	cmdBar       *cmdbar.CmdBar
-	treeView     *tview.TreeView
-	log          *Log
-	logger       Logger
-	workspace    *workspace.Workspace
-	commandQueue chan Command
+	app      *tview.Application
+	cmdBar   *cmdbar.CmdBar
+	treeView *tview.TreeView
+	notes    *tview.List
+
+	tabOrder   []tview.Primitive
+	currentTab int
+
+	log              *Log
+	logger           Logger
+	workspace        *workspace.Workspace
+	commandQueue     chan Command
+	SelectedNotebook *model.Notebook
 }
 
 // Run is the main entry point into the app.
@@ -95,16 +102,18 @@ func (m *Main) setUpUI() {
 	m.treeView = treeView
 	rootNode := tview.NewTreeNode("<root>")
 	treeView.SetRoot(rootNode)
+	treeView.SetSelectedFunc(func(node *tview.TreeNode) {
+		notebook := node.GetReference().(*model.Notebook)
+		m.SelectedNotebook = notebook
+	})
 
-	//treeView.SetCurrentNode(treeView.GetRoot().GetChildren()[0])
-
-	notes := tview.NewList()
-	notes.SetBorder(true).SetTitle("Notes")
+	m.notes = tview.NewList()
+	m.notes.SetBorder(true).SetTitle("Notes")
 
 	noteDetails := tview.NewFlex()
 
 	mainPanel.AddItem(treeView, 0, 1, false)
-	mainPanel.AddItem(notes, 0, 1, false)
+	mainPanel.AddItem(m.notes, 0, 1, false)
 
 	mainPanel.AddItem(noteDetails, 0, 2, false)
 
@@ -117,6 +126,28 @@ func (m *Main) setUpUI() {
 	root.AddItem(m.cmdBar, 1, 1, false)
 	m.app.SetRoot(root, true)
 	m.app.SetFocus(m.treeView)
+
+	m.tabOrder = []tview.Primitive{
+		m.treeView,
+		m.notes,
+		//noteDetails,
+	}
+	m.treeView.SetDoneFunc(m.handleTabWithKey)
+	m.notes.SetInputCapture(m.handleTabInputHandler)
+}
+
+func (m *Main) handleTabInputHandler(event *tcell.EventKey) *tcell.EventKey {
+	if event.Key() == tcell.KeyTab {
+		m.handleTabWithKey(event.Key())
+	}
+	return event
+}
+
+func (m *Main) handleTabWithKey(key tcell.Key) {
+	if key == tcell.KeyTab {
+		m.currentTab = (m.currentTab + 1) % len(m.tabOrder)
+		m.app.SetFocus(m.tabOrder[m.currentTab])
+	}
 }
 
 func (m *Main) printHelp() {
@@ -139,9 +170,17 @@ func (m *Main) setUpCommands(ctx context.Context, cancel func()) {
 		m.printHelp()
 		return nil
 	})
-	m.cmdBar.AddCmd(":foo", "foo", func(s string) error {
-		m.logger.WriteString("doing foo")
-		m.commandQueue <- &FooCommand{UIUpdater: m, Tree: m.treeView}
+	m.cmdBar.AddCmd(":mkbook", "create new notebook", func(s string) error {
+		m.commandQueue <- &CreateNotebookCommand{UIUpdater: m, Tree: m.treeView, Workspace: m.workspace, Name: s}
+		return nil
+	})
+	m.cmdBar.AddCmd(":mknote", "create new note in the current notebook", func(s string) error {
+		currentNode := m.treeView.GetCurrentNode()
+		if currentNode == nil {
+			return fmt.Errorf("cannot create note without selecting a notebook first")
+		}
+		notebook := currentNode.GetReference().(*model.Notebook)
+		m.commandQueue <- &CreateNoteCommand{UIUpdater: m, Notes: m.notes, Workspace: m.workspace, Name: s, Parent: notebook}
 		return nil
 	})
 }
@@ -161,15 +200,22 @@ func (m *Main) shutdownListener(ctx context.Context) {
 }
 
 func (m *Main) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
-	if m.app.GetFocus() != m.cmdBar && event.Key() == tcell.KeyRune {
-		switch event.Rune() {
-		case ':':
-			m.cmdBar.SetText(":")
-			m.app.SetFocus(m.cmdBar)
-		case '/':
-			m.cmdBar.SetText("/")
-			m.app.SetFocus(m.cmdBar)
+	if m.app.GetFocus() == m.cmdBar {
+		if event.Key() == tcell.KeyEscape {
+			m.app.SetFocus(m.tabOrder[m.currentTab])
+		}
+	} else {
+		if event.Key() == tcell.KeyRune {
+			switch event.Rune() {
+			case ':':
+				m.cmdBar.SetText(":")
+				m.app.SetFocus(m.cmdBar)
+			case '/':
+				m.cmdBar.SetText("/")
+				m.app.SetFocus(m.cmdBar)
+			}
 		}
 	}
+
 	return event
 }
