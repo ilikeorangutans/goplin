@@ -10,6 +10,7 @@ func NewNotes() *Notes {
 	return &Notes{
 		byNotebook: make(map[string][]*model.Note),
 		byID:       make(map[string]*model.Note),
+		Events:     make(chan Event),
 	}
 }
 
@@ -17,6 +18,7 @@ type Notes struct {
 	notes      []*model.Note
 	byNotebook map[string][]*model.Note
 	byID       map[string]*model.Note
+	Events     chan Event
 }
 
 func (n *Notes) ByID(id string) (*model.Note, error) {
@@ -49,5 +51,8 @@ func (n *Notes) Save(note *model.Note) (*model.Note, error) {
 	n.notes = append(n.notes, note)
 	n.byNotebook[note.ParentID] = append(n.byNotebook[note.ParentID], note)
 	n.byID[note.ID] = note
+
+	n.Events <- Event{ID: note.ID}
+
 	return note, nil
 }

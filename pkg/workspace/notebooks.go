@@ -8,16 +8,19 @@ import (
 
 var ErrNoSuchItem = fmt.Errorf("no such item")
 
+type EventType int
+
 func NewNotebooks() *Notebooks {
 	return &Notebooks{
-		byID: make(map[string]*model.Notebook),
+		byID:   make(map[string]*model.Notebook),
+		Events: make(chan Event),
 	}
 }
 
-// TODO add a callback mechanism so I can easily listen to changes in notebooks
 type Notebooks struct {
 	notebooks []*model.Notebook
 	byID      map[string]*model.Notebook
+	Events    chan Event
 }
 
 func (n *Notebooks) ByID(id string) (*model.Notebook, error) {
@@ -50,6 +53,8 @@ func (n *Notebooks) Delete(id string) error {
 func (n *Notebooks) Save(notebook *model.Notebook) (*model.Notebook, error) {
 	n.notebooks = append(n.notebooks, notebook)
 	n.byID[notebook.ID] = notebook
+	// TODO we should differentiate between update and create
+	n.Events <- Event{ID: notebook.ID}
 	return notebook, nil
 }
 

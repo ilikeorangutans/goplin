@@ -54,10 +54,49 @@ func (m *Main) Run(ctx context.Context) error {
 
 	go m.shutdownListener(ctx)
 	go m.pollCommands(ctx)
+	go m.listenForWorkspaceEvents(ctx)
 
 	m.printHelp()
 
 	return m.app.Run()
+}
+
+func (m *Main) listenForWorkspaceEvents(ctx context.Context) {
+	// TODO need to stop this loop when we switch workspace
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-m.workspace.Notes().Events:
+			m.QueueUpdateDraw(func() {
+				m.notes.Clear()
+				notes, err := m.workspace.Notes().ByNotebook(m.treeView.GetCurrentNode().GetReference().(*model.Notebook))
+				if err != nil {
+					m.log.WriteString(fmt.Sprintf("error: %s", err))
+				}
+
+				for _, note := range notes {
+					m.notes.AddItem(note.Title, "", ' ', nil)
+				}
+			})
+		case <-m.workspace.Notebooks().Events:
+			// rebuild notebooks view
+			m.QueueUpdateDraw(func() {
+				notebooks, err := m.workspace.Notebooks().TopLevel()
+				if err != nil {
+					// TODO we should probably surface an error here and not crash
+					panic(err)
+				}
+				m.treeView.GetRoot().ClearChildren()
+				for _, notebook := range notebooks {
+					node := tview.NewTreeNode(notebook.Title)
+					node.SetReference(notebook)
+					m.treeView.GetRoot().AddChild(node)
+					m.treeView.SetCurrentNode(node)
+				}
+			})
+		}
+	}
 }
 
 func (m *Main) pollCommands(ctx context.Context) {
@@ -105,9 +144,21 @@ func (m *Main) setUpUI() {
 	treeView.SetSelectedFunc(func(node *tview.TreeNode) {
 		notebook := node.GetReference().(*model.Notebook)
 		m.SelectedNotebook = notebook
+
+		m.notes.Clear()
+		notes, err := m.workspace.Notes().ByNotebook(m.treeView.GetCurrentNode().GetReference().(*model.Notebook))
+		if err != nil {
+			m.log.WriteString(fmt.Sprintf("error: %s", err))
+		}
+
+		for _, note := range notes {
+			m.notes.AddItem(note.Title, "secondary", 0, nil)
+		}
+
 	})
 
 	m.notes = tview.NewList()
+	m.notes.ShowSecondaryText(false)
 	m.notes.SetBorder(true).SetTitle("Notes")
 
 	noteDetails := tview.NewFlex()
@@ -171,7 +222,7 @@ func (m *Main) setUpCommands(ctx context.Context, cancel func()) {
 		return nil
 	})
 	m.cmdBar.AddCmd(":mkbook", "create new notebook", func(s string) error {
-		m.commandQueue <- &CreateNotebookCommand{UIUpdater: m, Tree: m.treeView, Workspace: m.workspace, Name: s}
+		m.commandQueue <- &CreateNotebookCommand{Tree: m.treeView, Workspace: m.workspace, Name: s}
 		return nil
 	})
 	m.cmdBar.AddCmd(":mknote", "create new note in the current notebook", func(s string) error {
@@ -180,7 +231,7 @@ func (m *Main) setUpCommands(ctx context.Context, cancel func()) {
 			return fmt.Errorf("cannot create note without selecting a notebook first")
 		}
 		notebook := currentNode.GetReference().(*model.Notebook)
-		m.commandQueue <- &CreateNoteCommand{UIUpdater: m, Notes: m.notes, Workspace: m.workspace, Name: s, Parent: notebook}
+		m.commandQueue <- &CreateNoteCommand{Notes: m.notes, Workspace: m.workspace, Name: s, Parent: notebook}
 		return nil
 	})
 }
